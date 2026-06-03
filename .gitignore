@@ -1,0 +1,17 @@
+# IDEs
+.idea/
+.vscode/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Local Photos (to prevent pushing private biometric data to public GitHub)
+fotos/person.*.jpg
+fotos/*.jpg
+fotos/*.png
