@@ -1,32 +1,69 @@
 import cv2
+import os
+import sys
 
-detectorFace = cv2.CascadeClassifier("cascades\\haarcascade_frontalface_default.xml") # uso do haarcascade pora detectar face
-reconhecedor = cv2.face.LBPHFaceRecognizer_create() # traz a função do reconhecedor Eigenface
-reconhecedor.read('cascades\\classificadorLBPH.yml') # traz o classificador treinado
-largura, altura = 200, 200 # dimensão da imagem
-font = cv2.FONT_HERSHEY_COMPLEX_SMALL # tipo de letra
-camera = cv2.VideoCapture(0) # inicia a webcam para realizar o reconhecimento baseado no classificador
+# Definição de caminhos portáveis
+cascade_path = os.path.join("cascades", "haarcascade_frontalface_default.xml")
+model_path = os.path.join("cascades", "classificadorLBPH.yml")
 
-while True:
-    conectado, imagem = camera.read() # realiza a leitura pela webcam
-    imagemCinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY) # transfoma a imagem em escala de cinza
-    facesDetectadas = detectorFace.detectMultiScale(imagemCinza, scaleFactor=1.5, minSize=(30, 30)) # detecta a face encontrada
+# Verificar se os arquivos necessários existem
+if not os.path.exists(cascade_path):
+    print(f"Erro: Arquivo Haar Cascade não encontrado em '{cascade_path}'.")
+    sys.exit(1)
 
-    for (x, y, l, a) in facesDetectadas:
-        imagemFace = cv2.resize(imagemCinza[y:y + a, x:x + l], (largura, altura)) # redimensiona o tamanha da imagem capturada
-        cv2.rectangle(imagem, (x, y), (x + l, y + a), (0, 0, 255), 2) # desenha o retângulo da detecção
-        id, confianca = reconhecedor.predict(imagemFace) # realiza a predição do reconhecimento
-        nome = ""
-        if id == 1:
-            nome = 'sem macara' # reconhecimento sem uso de máscara, conforme reconhecedor
-        elif id == 2:
-            nome = 'com mascara' # reconhecimento com uso de máscara, conforme reconhecedor
-        cv2.putText(imagem, nome, (x, y + (a + 40)), font, 2, (0, 0, 255)) # escreve o texto do reconhecimento
-        cv2.putText(imagem, str(confianca), (x, y + (a + 60)), font, 1, (0, 0, 255)) # escreve o texto do intervalo de confiança
+if not os.path.exists(model_path):
+    print(f"Erro: Arquivo do modelo treinado não encontrado em '{model_path}'. Execute 'Algoritmo de treinamento.py' primeiro.")
+    sys.exit(1)
 
-    cv2.imshow("Face", imagem) # mostra o título da janela
-    if cv2.waitKey(1) == ord('q'): # interrompe apertando a tecla Q
-        break
+detectorFace = cv2.CascadeClassifier(cascade_path)
+reconhecedor = cv2.face.LBPHFaceRecognizer_create()
+reconhecedor.read(model_path)
 
-camera.release()
-cv2.destroyAllWindows()
+largura, altura = 200, 200
+font = cv2.FONT_HERSHEY_COMPLEX_SMALL
+
+camera = cv2.VideoCapture(0)
+if not camera.isOpened():
+    print("Erro: Não foi possível acessar a câmera.")
+    sys.exit(1)
+
+# Mapeamento de IDs para classes (rótulos legíveis)
+labels = {
+    1: "Sem mascara",
+    2: "Com mascara"
+}
+
+print("Iniciando reconhecimento facial LBPH. Pressione 'Q' na janela de vídeo para sair...")
+
+try:
+    while True:
+        conectado, imagem = camera.read()
+        if not conectado:
+            print("Erro: Falha na leitura do frame da câmera.")
+            break
+
+        imagemCinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+        facesDetectadas = detectorFace.detectMultiScale(imagemCinza, scaleFactor=1.5, minSize=(30, 30))
+
+        for (x, y, l, a) in facesDetectadas:
+            imagemFace = cv2.resize(imagemCinza[y:y + a, x:x + l], (largura, altura))
+            cv2.rectangle(imagem, (x, y), (x + l, y + a), (0, 0, 255), 2)
+            
+            # Predição do modelo
+            id, confianca = reconhecedor.predict(imagemFace)
+            
+            nome = labels.get(id, f"ID {id}")
+            
+            # Escrever o rótulo e nível de confiança no frame
+            cv2.putText(imagem, nome, (x, y + (a + 30)), font, 1.5, (0, 0, 255), 2)
+            cv2.putText(imagem, f"Conf: {round(confianca, 2)}", (x, y + (a + 55)), font, 1.0, (0, 0, 255), 1)
+
+        cv2.imshow("Reconhecimento Facial LBPH - Pressione Q para sair", imagem)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+finally:
+    print("Liberando recursos do hardware...")
+    camera.release()
+    cv2.destroyAllWindows()
